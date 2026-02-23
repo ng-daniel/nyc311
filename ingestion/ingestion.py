@@ -91,7 +91,7 @@ def normalize_batch_dicts(data: list[dict], columns: list[str]) -> pl.DataFrame:
         including any missing columns filled with null values.
     """
 
-    df = pl.DataFrame(data)
+    df = pl.DataFrame(data, strict=False)
     for col in columns:
         if col not in df.columns:
             df = df.with_columns(pl.lit(None).alias(col))
@@ -163,8 +163,9 @@ def ingest_pipeline() -> None:
     BATCH_SIZE = 10000
     
     session = requests.Session()
+    print(DB_PORT)
     db_connection = psycopg2.connect(
-        host="host.docker.internal",
+        host="localhost",
         database=DB_NAME,
         user=DB_USER,
         password=DB_PASS,
@@ -184,6 +185,10 @@ def ingest_pipeline() -> None:
             break
             
         df = normalize_batch_dicts(data, EXPECTED_COLUMNS)
+        for col in df.columns:
+            if isinstance(df[col].dtype, (pl.Struct, pl.List)):
+                df = df.with_columns(pl.col(col).cast(pl.Utf8))
+
         load_batch(db_connection, df, TABLE_NAME)
 
         last_key = df["unique_key"][-1]
