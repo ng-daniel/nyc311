@@ -163,7 +163,6 @@ def ingest_pipeline() -> None:
     BATCH_SIZE = 10000
     
     session = requests.Session()
-    print(DB_PORT)
     db_connection = psycopg2.connect(
         host="localhost",
         database=DB_NAME,
@@ -194,7 +193,7 @@ def ingest_pipeline() -> None:
         last_key = df["unique_key"][-1]
         total_rows += df.height
 
-        logging.info(f"Loaded {df.height} rows. Total: {total_rows}. Last key: {last_key}")
+        logging.info(f"Loaded {df.height} rows. Session total: {total_rows}. Last key: {last_key}")
     
     db_connection.close()
     session.close()
@@ -231,6 +230,7 @@ def ingest_sample(size: int) -> None:
     for col in df_norm.columns:
         if isinstance(df_norm[col].dtype, (pl.Struct, pl.List)):
             df_norm = df_norm.with_columns(pl.col(col).cast(pl.Utf8))
+
     df_raw.write_csv("./ingestion/sample_raw.csv")
     df_norm.write_csv("./ingestion/sample_norm.csv")
 
