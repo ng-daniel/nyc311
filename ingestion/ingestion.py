@@ -17,6 +17,7 @@ APP_KEY = os.getenv("NYC_OD_APP_TOKEN")
 DB_NAME = os.getenv("POSTGRES_DB")
 DB_USER = os.getenv("POSTGRES_USER")
 DB_PASS = os.getenv("POSTGRES_PASSWORD")
+DB_PORT = os.getenv("POSTGRES_PORT", 5432)
 
 BATCH_SIZE = 100000
 
@@ -144,7 +145,7 @@ def get_max_existing_key(db_connection, table_name: str) -> str | None:
         result = db_cursor.fetchone()[0]
     return result
 
-def ingest_pipeline(batch_size: int):
+def ingest_pipeline() -> None:
     """
     Runs the full ingestion pipeline.
 
@@ -158,11 +159,17 @@ def ingest_pipeline(batch_size: int):
         raw/bronze layer.
     """
 
-    TABLE_NAME = None
+    TABLE_NAME = "raw.nyc_311_complaints"
     BATCH_SIZE = 10000
     
     session = requests.Session()
-    db_connection = psycopg2.connect(f"dbname={DB_NAME} user={DB_USER} password={DB_PASS}")
+    db_connection = psycopg2.connect(
+        host="host.docker.internal",
+        database=DB_NAME,
+        user=DB_USER,
+        password=DB_PASS,
+        port=DB_PORT
+    )
     headers = { 
         'X-App-Token': APP_KEY 
     }
@@ -171,7 +178,7 @@ def ingest_pipeline(batch_size: int):
     total_rows = 0
 
     while True:
-        data = extract_batch(session, headers, batch_size, last_key)
+        data = extract_batch(session, headers, BATCH_SIZE, last_key)
         if not data:
             logging.info("No more rows to ingest.")
             break
@@ -223,5 +230,6 @@ def ingest_sample(size: int) -> None:
     df_norm.write_csv("./ingestion/sample_norm.csv")
 
 if __name__ == "__main__":
-    ingest_sample(1000)
+    ingest_pipeline()
+    #ingest_sample(1000)
 

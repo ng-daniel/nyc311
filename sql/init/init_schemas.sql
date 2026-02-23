@@ -44,9 +44,8 @@ CREATE TABLE IF NOT EXISTS raw.nyc_311_complaints (
     road_ramp VARCHAR(255),
     vehicle_type VARCHAR(100),
     taxi_company_borough VARCHAR(100),
-    due_date TIMESTAMP,
+    due_date TIMESTAMP
 );
-
 
 CREATE SCHEMA IF NOT EXISTS staging;
 CREATE SCHEMA IF NOT EXISTS mart;

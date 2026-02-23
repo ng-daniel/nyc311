@@ -854,6 +854,7 @@ dependencies = [
     { name = "ipykernel" },
     { name = "pandas" },
     { name = "polars" },
+    { name = "psycopg2-binary" },
 ]
 
 [package.metadata]
@@ -864,6 +865,7 @@ requires-dist = [
     { name = "ipykernel", specifier = ">=7.2.0" },
     { name = "pandas", specifier = ">=3.0.1" },
     { name = "polars", specifier = ">=1.38.1" },
+    { name = "psycopg2-binary", specifier = ">=2.9.11" },
 ]
 
 [[package]]
