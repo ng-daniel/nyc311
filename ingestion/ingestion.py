@@ -19,6 +19,7 @@ DB_USER = os.getenv("POSTGRES_USER")
 DB_PASS = os.getenv("POSTGRES_PASSWORD")
 
 BATCH_SIZE = 100000
+
 EXPECTED_COLUMNS = ['unique_key', 'created_date', 'closed_date', 'agency', 'agency_name',
        'complaint_type', 'descriptor', 'descriptor_2', 'location_type',
        'incident_zip', 'incident_address', 'street_name', 'address_type',
@@ -36,7 +37,7 @@ EXPECTED_COLUMNS = ['unique_key', 'created_date', 'closed_date', 'agency', 'agen
 logging.basicConfig(level=logging.INFO)
 
 
-def extract_batch(session, headers, limit, last_key) -> List[Dict]:
+def extract_batch(session, headers, limit, last_key, override_params: dict = None) -> List[Dict]:
     """
     Extract a batch of data from the NYC 311 API.
 
@@ -45,6 +46,7 @@ def extract_batch(session, headers, limit, last_key) -> List[Dict]:
         headers: The headers to include in the request.
         last_key: The last unique key processed.
         limit: The maximum number of records to fetch.
+        override_params: Additional custom parameters to include in the request, which will override the default parameters.
 
     Returns:
         A list of dictionaries containing the batch of data.
@@ -56,6 +58,8 @@ def extract_batch(session, headers, limit, last_key) -> List[Dict]:
     }
     if last_key:
         params["$where"] = f"unique_key > '{last_key}'"
+    if override_params:
+        params = override_params
     
     response = session.get(
         API_URL,
@@ -74,24 +78,24 @@ def extract_batch(session, headers, limit, last_key) -> List[Dict]:
 def normalize_batch_dicts(data: list[dict], columns: list[str]) -> pl.DataFrame:
     """
     Normalize a batch of data represented as a list of dictionaries.
-    Reorders columns by first adding those that are present in the data, 
-    then adding any missing columns with null values.
+    Reorders columns by first adding any missing columns with null values,
+    then selecting only the expected columns in the specified order.
     
     Args:
         data: A list of dictionaries, where each dictionary represents a row of data.
         columns: A list of column names to ensure are present in the output.
     
     Returns:
-        A list of lists, where each inner list represents a row of data with values corresponding to the specified columns.
+        A Polars DataFrame with columns ordered according to the specified list, 
+        including any missing columns filled with null values.
     """
 
     df = pl.DataFrame(data)
-    df = df.select([col for col in columns if col in df.columns] + 
-                   [col for col in columns if col not in df.columns])
-    
     for col in columns:
         if col not in df.columns:
             df = df.with_columns(pl.lit(None).alias(col))
+    df = df.select(columns)
+    
     return df
 
 def load_batch(db_connection, df: pl.DataFrame, table_name: str) -> None:
@@ -182,3 +186,42 @@ def ingest_pipeline(batch_size: int):
     
     db_connection.close()
     session.close()
+
+def ingest_sample(size: int) -> None:
+    """
+    Ingest a recent sample of data from the NYC 311 API and write it to a CSV file.
+
+    Args:
+        size: The number of records to ingest.
+    
+    Returns:
+        None
+    """
+    session = requests.Session()
+    headers = { 
+        'X-App-Token': APP_KEY 
+    }
+    params = {
+        "$select": "*",
+        "$limit": size,
+    }
+    data = extract_batch(session, headers, size, None, override_params=params)
+    if not data:
+        logging.info("ingest_sample -> no data available to ingest")
+        return
+    df_raw = pl.DataFrame(data)
+    df_norm = normalize_batch_dicts(data, EXPECTED_COLUMNS)
+    
+    # cast nested/struct columns (like GeoJSON point data) to strings
+    for col in df_raw.columns:
+        if isinstance(df_raw[col].dtype, (pl.Struct, pl.List)):
+            df_raw = df_raw.with_columns(pl.col(col).cast(pl.Utf8))
+    for col in df_norm.columns:
+        if isinstance(df_norm[col].dtype, (pl.Struct, pl.List)):
+            df_norm = df_norm.with_columns(pl.col(col).cast(pl.Utf8))
+    df_raw.write_csv("./ingestion/sample_raw.csv")
+    df_norm.write_csv("./ingestion/sample_norm.csv")
+
+if __name__ == "__main__":
+    ingest_sample(1000)
+
