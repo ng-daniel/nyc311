@@ -140,3 +140,45 @@ def get_max_existing_key(db_connection, table_name: str) -> str | None:
         result = db_cursor.fetchone()[0]
     return result
 
+def ingest_pipeline(batch_size: int):
+    """
+    Runs the full ingestion pipeline.
+
+    1. Opens a session with the API, and a connection to the postgresql database
+    2. Extract a batch of data, either starting from the beginning or the last 
+        unique key in the database.
+    3. Normalize the data by ensuring all columns align with the expected ones.
+        Ignore unexpected columns and set missing expected columns to null.
+    4. Using the database connection and the resulting normalized df,
+        write the csv as bytes to a buffer and append that data to the
+        raw/bronze layer.
+    """
+
+    TABLE_NAME = None
+    BATCH_SIZE = 10000
+    
+    session = requests.Session()
+    db_connection = psycopg2.connect(f"dbname={DB_NAME} user={DB_USER} password={DB_PASS}")
+    headers = { 
+        'X-App-Token': APP_KEY 
+    }
+
+    last_key = get_max_existing_key(db_connection, TABLE_NAME)
+    total_rows = 0
+
+    while True:
+        data = extract_batch(session, headers, batch_size, last_key)
+        if not data:
+            logging.info("No more rows to ingest.")
+            break
+            
+        df = normalize_batch_dicts(data, EXPECTED_COLUMNS)
+        load_batch(db_connection, df, TABLE_NAME)
+
+        last_key = df["unique_key"][-1]
+        total_rows += df.height
+
+        logging.info(f"Loaded {df.height} rows. Total: {total_rows}. Last key: {last_key}")
+    
+    db_connection.close()
+    session.close()
