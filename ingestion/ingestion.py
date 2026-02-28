@@ -1,6 +1,7 @@
 import os
 import time
 import logging
+import subprocess
 from io import StringIO
 from typing import List, Dict
 
@@ -19,7 +20,7 @@ DB_USER = os.getenv("POSTGRES_USER")
 DB_PASS = os.getenv("POSTGRES_PASSWORD")
 DB_PORT = os.getenv("POSTGRES_PORT", 5432)
 
-BATCH_SIZE = 100000
+BATCH_SIZE = 10000
 
 EXPECTED_COLUMNS = ['unique_key', 'created_date', 'closed_date', 'agency', 'agency_name',
        'complaint_type', 'descriptor', 'descriptor_2', 'location_type',
@@ -90,13 +91,21 @@ def normalize_batch_dicts(data: list[dict], columns: list[str]) -> pl.DataFrame:
         A Polars DataFrame with columns ordered according to the specified list, 
         including any missing columns filled with null values.
     """
-
+    
+    print(data)
     df = pl.DataFrame(data, strict=False)
+    print(df.select(['created_date', 'closed_date']).sort(by=['created_date'], descending=True).head())
+
     for col in columns:
         if col not in df.columns:
             df = df.with_columns(pl.lit(None).alias(col))
-    df = df.select(columns)
     
+    date_columns = ['created_date', 'closed_date', 'resolution_action_updated_date', 'due_date']
+    for col in date_columns:
+        if col in df.columns:
+            df = df.with_columns(pl.col(col).cast(pl.Datetime))
+
+    df = df.select(columns)
     return df
 
 def load_batch(db_connection, df: pl.DataFrame, table_name: str) -> None:
@@ -120,7 +129,7 @@ def load_batch(db_connection, df: pl.DataFrame, table_name: str) -> None:
             f"""
             COPY {table_name} ({', '.join(df.columns)}) 
             FROM STDIN 
-            WITH CSV
+            WITH CSV NULL ''
             """,
             buffer)
     db_connection.commit()
@@ -160,7 +169,6 @@ def ingest_pipeline() -> None:
     """
 
     TABLE_NAME = "raw.nyc_311_complaints"
-    BATCH_SIZE = 10000
     
     session = requests.Session()
     db_connection = psycopg2.connect(
@@ -178,16 +186,19 @@ def ingest_pipeline() -> None:
     total_rows = 0
 
     while True:
-        data = extract_batch(session, headers, BATCH_SIZE, last_key)
+        data = extract_batch(session, headers, BATCH_SIZE, None) # last_key)
         if not data:
             logging.info("No more rows to ingest.")
             break
             
         df = normalize_batch_dicts(data, EXPECTED_COLUMNS)
+        print(df.select(['created_date', 'closed_date']).sort(by=['created_date'], descending=True).head())
+
         for col in df.columns:
             if isinstance(df[col].dtype, (pl.Struct, pl.List)):
                 df = df.with_columns(pl.col(col).cast(pl.Utf8))
 
+        print(df.select(['created_date', 'closed_date']).sort(by=['created_date'], descending=True).head())
         load_batch(db_connection, df, TABLE_NAME)
 
         last_key = df["unique_key"][-1]
@@ -195,10 +206,12 @@ def ingest_pipeline() -> None:
 
         logging.info(f"Loaded {df.height} rows. Session total: {total_rows}. Last key: {last_key}")
     
+        break
+
     db_connection.close()
     session.close()
 
-def ingest_sample(size: int) -> None:
+def ingest_sample(size: int, last_key: int | None = None) -> None:
     """
     Ingest a recent sample of data from the NYC 311 API and write it to a CSV file.
 
@@ -212,10 +225,17 @@ def ingest_sample(size: int) -> None:
     headers = { 
         'X-App-Token': APP_KEY 
     }
-    params = {
-        "$select": "*",
-        "$limit": size,
-    }
+    if last_key:
+        params = {
+            "$select": "*",
+            "$limit": size,
+            "$where": f"unique_key = '{last_key}'"
+        }
+    else:
+        params = {
+            "$select": "*",
+            "$limit": size,
+        }
     data = extract_batch(session, headers, size, None, override_params=params)
     if not data:
         logging.info("ingest_sample -> no data available to ingest")
@@ -235,6 +255,7 @@ def ingest_sample(size: int) -> None:
     df_norm.write_csv("./ingestion/sample_norm.csv")
 
 if __name__ == "__main__":
-    ingest_pipeline()
-    #ingest_sample(1000)
+    # ingest_pipeline()
+    ingest_sample(1000, last_key=42306178)
+
 

@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS raw.nyc_311_complaints (
     resolution_description TEXT,
     resolution_action_updated_date TIMESTAMP,
     community_board VARCHAR(50),
-    council_district INT,
+    council_district TEXT,
     police_precinct VARCHAR(50),
     bbl VARCHAR(50),
     borough VARCHAR(50),
