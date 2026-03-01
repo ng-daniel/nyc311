@@ -1,7 +1,6 @@
 import os
 import time
 import logging
-import subprocess
 from io import StringIO
 from typing import List, Dict, Optional
 from datetime import datetime
@@ -46,7 +45,8 @@ class NYC311Ingestion:
         self.db_user = os.getenv("POSTGRES_USER")
         self.db_pass = os.getenv("POSTGRES_PASSWORD")
         self.db_port = os.getenv("POSTGRES_PORT", 5432)
-        self.batch_size = 10000
+
+        self.batch_size = 1000
         self.table_name = "raw.nyc_311_complaints"
         self.source_name = "nyc_311_complaints"
         self.metadata_table_name = "raw.ingestion_metadata"
@@ -82,7 +82,17 @@ class NYC311Ingestion:
         """
         Extract a batch of data from the NYC 311 API using a
         (created_date, unique_key) watermark strategy.
+
+        If a last_created_date and last_unique_key are provided, the method will fetch records where:
+        - main:         created_date is greater than last_created_date, OR
+        - tiebreaker:   created_date is equal to last_created_date AND unique_key is greater than last_unique_key
         
+        Implements this using a double request approach for efficiency 
+        while still capping records at limit by setting the limit of main query
+        to `overall limit` - `number of tiebreaker rows`. 
+
+        If neither last_created_date or last_unique_key exist, 
+
         Args:
             limit: Maximum number of records to fetch.
             last_created_date: Last created_date watermark for filtering.
@@ -92,49 +102,71 @@ class NYC311Ingestion:
         Returns:
             A list of dictionaries containing the batch of data.
         """
-
+        
+        headers = {'X-App-Token': self.app_key}
         params = {
             "$order": "created_date ASC, unique_key ASC",
-            "$limit": limit,
             "$select": "*"
         }
+        if override_params:
+            params.update(override_params)
+        
+        n_retries = 3
+        timeout_sec = 30
+        tiebreaker_data: List[Dict] = []
+        main_data: List[Dict] = []
 
-        # handle cases for having both date and key, or just date
-        # should only have just date if using start_date provided param instead of metadata watermark 
         if last_unique_key and last_created_date:
             iso_ts = last_created_date.strftime("%Y-%m-%dT%H:%M:%S.000")
-            params["$where"] = (
-                f"created_date > '{iso_ts}' "
-                f"OR (created_date = '{iso_ts}' "
-                f"AND unique_key > '{last_unique_key}')"
+            params["$where"] = f"created_date > '{iso_ts}'"
+            
+            params_tiebreaker = params.copy()
+            params_tiebreaker["$where"] = (
+                f"created_date = '{iso_ts}' " 
+                f"AND unique_key > '{last_unique_key}'"
             )
-        elif last_created_date:
+            params_tiebreaker["$limit"] = limit
+
+            for attempt in range(n_retries):
+                response = self.session.get(
+                    self.api_url,
+                    headers=headers,
+                    params=params_tiebreaker, # uses tiebreaker params instead
+                    timeout=timeout_sec
+                )
+                if response.status_code == 429:
+                    time.sleep(2 ** (attempt + 1))  # Exponential backoff
+                    continue
+                response.raise_for_status()
+                tiebreaker_data = response.json()
+                break
+            else:
+                raise RuntimeError("Max retries exceeded for API tiebreaker extraction.")
+        elif last_created_date: # this case typically only runs for the start_date override scenario
             iso_ts = last_created_date.strftime("%Y-%m-%dT%H:%M:%S.000")
             params["$where"] = f"created_date >= '{iso_ts}'"
 
-        if override_params:
-            params.update(override_params)
-
-        headers = {'X-App-Token': self.app_key}
-        n_retries = 3
-        timeout_sec = 30
+        remaining = max(0, limit - len(tiebreaker_data))
+        if remaining > 0:
+            params["$limit"] = remaining
+            for attempt in range(n_retries):
+                response = self.session.get(
+                    self.api_url,
+                    headers=headers,
+                    params=params, # uses main params for main query
+                    timeout=timeout_sec
+                )
+                if response.status_code == 429:
+                    time.sleep(2 ** (attempt + 1))  # Exponential backoff
+                    continue
+                response.raise_for_status()
+                main_data = response.json()
+                break
+            else:
+                raise RuntimeError("Max retries exceeded for API main extraction.")
         
-        for attempt in range(n_retries):
-            response = self.session.get(
-                self.api_url,
-                headers=headers,
-                params=params,
-                timeout=timeout_sec
-            )
-
-            if response.status_code == 429:
-                time.sleep(2 * (attempt + 1))  # Exponential backoff
-                continue
-
-            response.raise_for_status()
-            return response.json()
-
-        raise RuntimeError("Max retries exceeded for API extraction.")
+        tiebreaker_data.extend(main_data)
+        return tiebreaker_data
 
     def normalize_batch_dicts(self, data: list[dict]) -> pl.DataFrame:
         """
@@ -345,6 +377,6 @@ class NYC311Ingestion:
 
 if __name__ == "__main__":
     
-    start_date = datetime(2024, 1, 1)  # Example start date for backfill; set to None to use metadata watermark
+    start_date = datetime(2026, 1, 1)  # Example start date for backfill; set to None to use metadata watermark
     with NYC311Ingestion() as ingestion:
         ingestion.run_ingest_pipeline(start_date=start_date)
