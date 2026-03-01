@@ -47,5 +47,12 @@ CREATE TABLE IF NOT EXISTS raw.nyc_311_complaints (
     due_date TIMESTAMP
 );
 
+CREATE TABLE raw.ingestion_metadata (
+    source_name TEXT PRIMARY KEY,
+    last_created_date TIMESTAMP,
+    last_unique_key TEXT,
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
 CREATE SCHEMA IF NOT EXISTS staging;
 CREATE SCHEMA IF NOT EXISTS mart;

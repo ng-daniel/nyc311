@@ -3,7 +3,7 @@ import time
 import logging
 import subprocess
 from io import StringIO
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 import requests
 from dotenv import load_dotenv
@@ -38,43 +38,53 @@ EXPECTED_COLUMNS = ['unique_key', 'created_date', 'closed_date', 'agency', 'agen
 
 logging.basicConfig(level=logging.INFO)
 
-
-def extract_batch(session, headers, limit, last_key, override_params: dict = None) -> List[Dict]:
+def extract_batch(
+    session,
+    headers,
+    limit: int,
+    last_created_date: Optional[str] = None,
+    last_unique_key: Optional[str] = None,
+    override_params: Optional[dict] = None,
+) -> List[Dict]:
     """
-    Extract a batch of data from the NYC 311 API.
-
-    Args:
-        session: The requests session object.
-        headers: The headers to include in the request.
-        last_key: The last unique key processed.
-        limit: The maximum number of records to fetch.
-        override_params: Additional custom parameters to include in the request, which will override the default parameters.
-
-    Returns:
-        A list of dictionaries containing the batch of data.
+    Extract a batch of data from the NYC 311 API using a
+    (created_date, unique_key) watermark strategy.
     """
+
     params = {
-        "$order": "unique_key",
+        "$order": "created_date, unique_key",
         "$limit": limit,
         "$select": "*"
     }
-    if last_key:
-        params["$where"] = f"unique_key > '{last_key}'"
+
+    if last_created_date and last_unique_key:
+        params["$where"] = (
+            f"(created_date > '{last_created_date}') "
+            f"OR (created_date = '{last_created_date}' "
+            f"AND unique_key > '{last_unique_key}')"
+        )
+
     if override_params:
-        params = override_params
-    
-    response = session.get(
-        API_URL,
-        headers=headers,
-        params=params,
-        timeout=30
-    )
-    if response.status_code == 429: # retry logic
-        time.sleep(2)
-        return extract_batch(session, headers, last_key, limit)
-    
-    response.raise_for_status()
-    return response.json()
+        params.update(override_params)
+
+    n_retries = 3
+    timeout_sec = 30
+    for attempt in range(n_retries):
+        response = session.get(
+            API_URL,
+            headers=headers,
+            params=params,
+            timeout=timeout_sec
+        )
+
+        if response.status_code == 429:
+            time.sleep(2 * (attempt + 1)) # Exponential backoff
+            continue
+
+        response.raise_for_status()
+        return response.json()
+
+    raise RuntimeError("Max retries exceeded for API extraction.")
 
 
 def normalize_batch_dicts(data: list[dict], columns: list[str]) -> pl.DataFrame:
@@ -255,7 +265,7 @@ def ingest_sample(size: int, last_key: int | None = None) -> None:
     df_norm.write_csv("./ingestion/sample_norm.csv")
 
 if __name__ == "__main__":
-    # ingest_pipeline()
+    ingest_pipeline()
     ingest_sample(1000, last_key=42306178)
 
 
