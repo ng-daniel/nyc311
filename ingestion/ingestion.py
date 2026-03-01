@@ -42,7 +42,7 @@ class NYC311Ingestion:
         """Initialize NYC311 ingestion with configuration from environment variables."""
         self.api_url = os.getenv("NYC_311_URL")
         self.app_key = os.getenv("NYC_OD_APP_TOKEN")
-        
+
         self.db_name = os.getenv("POSTGRES_DB")
         self.db_user = os.getenv("POSTGRES_USER")
         self.db_pass = os.getenv("POSTGRES_PASSWORD")
@@ -195,6 +195,12 @@ class NYC311Ingestion:
                 df = df.with_columns(pl.col(col).cast(pl.Datetime))
 
         df = df.select(self.EXPECTED_COLUMNS)
+
+        # cast any nested/struct columns (like GeoJSON point data) to strings before loading
+        for col in df.columns:
+            if isinstance(df[col].dtype, (pl.Struct, pl.List)):
+                df = df.with_columns(pl.col(col).cast(pl.Utf8))
+
         return df
 
     def load_batch(self, df: pl.DataFrame) -> None:
@@ -326,27 +332,30 @@ class NYC311Ingestion:
             logging.info("Starting ingestion with no existing watermark (full table scan)")
 
         total_rows = 0
+        total_time = 0
+        n_batches = 0
         while True:
+            start_time = time.time()
+            
             data = self.extract_batch(self.batch_size, last_created_date=last_date, last_unique_key=last_key)
             if not data:
                 logging.info("No more rows to ingest.")
                 break
-                
-            df = self.normalize_batch_dicts(data)
-
-            # cast any nested/struct columns (like GeoJSON point data) to strings before loading
-            for col in df.columns:
-                if isinstance(df[col].dtype, (pl.Struct, pl.List)):
-                    df = df.with_columns(pl.col(col).cast(pl.Utf8))
-
+            df = self.normalize_batch_dicts(data)    
             self.load_batch(df)
 
             last_row = df.sort(["created_date", "unique_key"]).tail(1)
             last_date = last_row["created_date"][0]
             last_key = last_row["unique_key"][0]
+
+            end_time = time.time()
+
+            batch_time = end_time - start_time
+            total_time += batch_time
+            n_batches += 1
             total_rows += df.height
 
-            logging.info(f"Loaded {df.height} rows. Session total: {total_rows}. Latest record: {last_date} {last_key}")
+            logging.info(f"{df.height} rows (Session: {total_rows}). Latest: {last_date} {last_key}. Time: {batch_time:.2f}s (Session: {total_time:.2f}s, Avg: {total_time/n_batches:.2f}s)")
 
             # rescan for next loop
             last_date, last_key = self.get_latest_date_key()
