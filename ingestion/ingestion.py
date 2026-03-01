@@ -92,25 +92,25 @@ class NYC311Ingestion:
         Returns:
             A list of dictionaries containing the batch of data.
         """
+
         params = {
             "$order": "created_date ASC, unique_key ASC",
             "$limit": limit,
             "$select": "*"
         }
 
-        if last_created_date and last_unique_key:
+        # handle cases for having both date and key, or just date
+        # should only have just date if using start_date provided param instead of metadata watermark 
+        if last_unique_key and last_created_date:
             iso_ts = last_created_date.strftime("%Y-%m-%dT%H:%M:%S.000")
-            unique_literal = (
-                str(last_unique_key)
-                if str(last_unique_key).isdigit()
-                else f"'{last_unique_key}'"
-            )
-            
             params["$where"] = (
                 f"created_date > '{iso_ts}' "
                 f"OR (created_date = '{iso_ts}' "
-                f"AND unique_key > '{unique_literal}')"
+                f"AND unique_key > '{last_unique_key}')"
             )
+        elif last_created_date:
+            iso_ts = last_created_date.strftime("%Y-%m-%dT%H:%M:%S.000")
+            params["$where"] = f"created_date >= '{iso_ts}'"
 
         if override_params:
             params.update(override_params)
@@ -253,7 +253,7 @@ class NYC311Ingestion:
 
         return last_created_date, last_unique_key
 
-    def run_ingest_pipeline(self) -> None:
+    def run_ingest_pipeline(self, start_date: Optional[datetime]) -> None:
         """
         Runs the full ingestion pipeline.
 
@@ -264,12 +264,15 @@ class NYC311Ingestion:
            into the raw/bronze layer via PostgreSQL COPY.
         """
         last_date, last_key = self.get_latest_date_key()
-        if last_date and last_key:
+        if start_date and (not last_date or start_date > last_date):
+            last_date, last_key = start_date, None
+            logging.info(f"Starting ingestion at provided start_date: {last_date}.")
+        elif last_date and last_key:
             logging.info(f"Starting ingestion at date: {last_date} with key {last_key}")
         else:
             logging.info("Starting ingestion with no existing watermark (full table scan)")
-        total_rows = 0
 
+        total_rows = 0
         while True:
             data = self.extract_batch(self.batch_size, last_created_date=last_date, last_unique_key=last_key)
             if not data:
@@ -288,12 +291,12 @@ class NYC311Ingestion:
             last_key = df["unique_key"][-1]
             total_rows += df.height
 
-            logging.info(f"Loaded {df.height} rows. Session total: {total_rows}. Date-key: {last_date}-{last_key}")
+            logging.info(f"Loaded {df.height} rows. Session total: {total_rows}. Latest record: {last_date} {last_key}")
 
             # rescan for next loop
             last_date, last_key = self.get_latest_date_key()
 
-        
+         
     def ingest_sample(self, size: int, last_key: int | None = None) -> None:
         """
         Ingest a recent sample of data from the NYC 311 API and write it to CSV files.
@@ -341,6 +344,7 @@ class NYC311Ingestion:
 
 
 if __name__ == "__main__":
+    
+    start_date = datetime(2024, 1, 1)  # Example start date for backfill; set to None to use metadata watermark
     with NYC311Ingestion() as ingestion:
-        ingestion.run_ingest_pipeline()
-        # ingestion.ingest_sample(1000, last_key=42306178)
+        ingestion.run_ingest_pipeline(start_date=start_date)
