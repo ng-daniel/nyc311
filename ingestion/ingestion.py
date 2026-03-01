@@ -37,16 +37,18 @@ class NYC311Ingestion:
         'vehicle_type', 'taxi_company_borough', 'due_date'
     ]
 
-    def __init__(self):
+    def __init__(self, 
+                batch_size:int = 1000):
         """Initialize NYC311 ingestion with configuration from environment variables."""
         self.api_url = os.getenv("NYC_311_URL")
         self.app_key = os.getenv("NYC_OD_APP_TOKEN")
+        
         self.db_name = os.getenv("POSTGRES_DB")
         self.db_user = os.getenv("POSTGRES_USER")
         self.db_pass = os.getenv("POSTGRES_PASSWORD")
         self.db_port = os.getenv("POSTGRES_PORT", 5432)
 
-        self.batch_size = 1000
+        self.batch_size = batch_size
         self.table_name = "raw.nyc_311_complaints"
         self.source_name = "nyc_311_complaints"
         self.metadata_table_name = "raw.ingestion_metadata"
@@ -205,34 +207,54 @@ class NYC311Ingestion:
         Returns:
             None
         """
+
+        if df.is_empty():
+            logging.warning("Requested batch load for empty dataframe, probably shouldn't happen, go check that out.")
+            return 
+        df = df.unique(subset=["unique_key"])
+
         buffer = StringIO()
         df.write_csv(buffer, include_header=False)
         buffer.seek(0)
-
+        
+        temp_table_name = f"tmp_{self.source_name}_batch"
         with self.db_connection.cursor() as db_cursor:
+            db_cursor.execute(
+                f"""
+                DROP TABLE IF EXISTS {temp_table_name};
+                CREATE TEMP TABLE {temp_table_name} (LIKE {self.table_name} INCLUDING ALL)
+                """
+            )
             db_cursor.copy_expert(
                 f"""
-                COPY {self.table_name} ({', '.join(df.columns)}) 
+                COPY {temp_table_name} ({', '.join(df.columns)}) 
                 FROM STDIN 
                 WITH CSV 
                 NULL ''
                 """,
-                buffer)
+                buffer
+            )
+            db_cursor.execute(
+                f"""
+                INSERT INTO {self.table_name} ({', '.join(df.columns)})
+                SELECT * FROM {temp_table_name}
+                ON CONFLICT (unique_key) DO NOTHING
+                """
+            )
             
             # update ingestion metadata with the latest date/key pair seen in this batch
             # handle conflicts by taking the max of the created_date, and then using the 
             # unique_key as a tiebreaker if created_date is the same
-            last_row = (
-                df
-                .sort(["created_date", "unique_key"])
-                .tail(1)
-            )
-            max_date = last_row["created_date"][0]
-            max_key = last_row["unique_key"][0]
             db_cursor.execute(
                 f"""
+                WITH max_row AS (
+                    SELECT created_date, unique_key
+                    FROM {temp_table_name}
+                    ORDER BY created_date DESC, unique_key DESC
+                    LIMIT 1
+                )
                 INSERT INTO {self.metadata_table_name} (source_name, last_created_date, last_unique_key)
-                VALUES (%s, %s, %s)
+                SELECT '{self.source_name}', created_date, unique_key FROM max_row
                 ON CONFLICT (source_name) DO UPDATE
                 SET
                     last_created_date = GREATEST(
@@ -250,8 +272,7 @@ class NYC311Ingestion:
                         ELSE ingestion_metadata.last_unique_key
                     END,
                     updated_at = NOW()
-                """,
-                (self.source_name, max_date, max_key),
+                """
             )
         self.db_connection.commit()
 
@@ -320,7 +341,9 @@ class NYC311Ingestion:
 
             self.load_batch(df)
 
-            last_key = df["unique_key"][-1]
+            last_row = df.sort(["created_date", "unique_key"]).tail(1)
+            last_date = last_row["created_date"][0]
+            last_key = last_row["unique_key"][0]
             total_rows += df.height
 
             logging.info(f"Loaded {df.height} rows. Session total: {total_rows}. Latest record: {last_date} {last_key}")
@@ -378,5 +401,5 @@ class NYC311Ingestion:
 if __name__ == "__main__":
     
     start_date = datetime(2026, 1, 1)  # Example start date for backfill; set to None to use metadata watermark
-    with NYC311Ingestion() as ingestion:
+    with NYC311Ingestion(batch_size=100000) as ingestion:
         ingestion.run_ingest_pipeline(start_date=start_date)
