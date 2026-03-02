@@ -1,4 +1,4 @@
-dbt models structure
+# DBT models structure
 
 ```
 +---models
