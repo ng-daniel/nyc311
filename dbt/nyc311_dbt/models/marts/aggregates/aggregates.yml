@@ -1,0 +1,43 @@
+models:
+  - name: fct_311_geo_heatmap
+    description: "Aggregate counts and averages per rounded location and day"
+    columns:
+      - name: created_date
+        tests:
+          - not_null
+      - name: latitude_rounded
+        tests:
+          - not_null
+      - name: longitude_rounded
+        tests:
+          - not_null
+      - name: complaint_count
+      - name: avg_resolution_hours
+
+  - name: fct_311_daily
+    description: "Daily aggregates by borough and complaint type"
+    columns:
+      - name: created_date
+        tests:
+          - not_null
+      - name: borough
+        tests:
+          - not_null
+      - name: complaint_type
+        tests:
+          - not_null
+      - name: complaint_count
+      - name: avg_resolution_hours
+
+  - name: fct_311_agency_performance
+    description: "Monthly metrics per agency"
+    columns:
+      - name: agency
+        tests:
+          - not_null
+      - name: month
+        description: "month truncated from created_at"
+        tests:
+          - not_null
+      - name: complaint_count
+      - name: avg_resolution_hours

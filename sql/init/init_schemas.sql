@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS raw.nyc_311_complaints (
     park_borough VARCHAR(100),
     latitude NUMERIC,
     longitude NUMERIC,
-    location TEXT,
+    location JSONB,
     cross_street_1 VARCHAR(255),
     cross_street_2 VARCHAR(255),
     intersection_street_1 VARCHAR(255),

@@ -1,15 +1,57 @@
 models:
   - name: stg_nyc_311_complaints
+    description: "Staging model that renames and cleans raw 311 complaints data"
     columns:
       - name: unique_key
+        description: "original unique_key from source"
         tests:
           - not_null
           - unique
-
       - name: created_at
+        description: "timestamp when complaint was created"
         tests:
           - not_null
-
+      - name: closed_at
+        description: "timestamp when complaint was closed (may be NULL)"
+      - name: due_at
+        description: "due date field from source"
       - name: agency
+        description: "agency code responsible for handling the complaint"
         tests:
           - not_null
+      - name: agency_name
+        description: "full agency name"
+      - name: complaint_type
+        description: "high-level complaint category"
+        tests:
+          - not_null
+      - name: complaint_subtype
+        description: "secondary descriptor for the complaint"
+      - name: descriptor_2
+        description: "additional descriptor field from source"
+      - name: borough
+        description: "borough associated with the complaint"
+      - name: zip_code
+        description: "postal ZIP code of incident"
+      - name: city
+        description: "city provided in the record"
+      - name: status
+        description: "current status value from the source"
+      - name: resolution_description
+        description: "text description of how the complaint was resolved"
+      - name: resolution_updated_at
+        description: "timestamp when the resolution action was last updated"
+      - name: latitude
+        description: "latitude coordinate of the incident"
+      - name: longitude
+        description: "longitude coordinate of the incident"
+      - name: council_district
+        description: "City council district (text)"
+      - name: police_precinct
+        description: "police precinct identifier"
+      - name: community_board
+        description: "community board number or name"
+      - name: submission_channel
+        description: "open data channel type used to submit the complaint"
+      - name: resolution_hours
+        description: "computed hours between created_at and closed_at"

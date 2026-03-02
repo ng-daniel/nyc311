@@ -1,0 +1,17 @@
+models:
+  - name: int_311_enriched
+    description: "Intermediate model adding buckets and rounding to the staged complaint data. Only lists added and modified columns"
+    columns:
+      - name: resolution_bucket
+        description: "categorical bucket based on resolution_hours"
+        tests:
+          - accepted_values:
+              values: ["under_24h", "1-3_days", "over_3_days"]
+      - name: is_instant_close
+        description: "indicator when closed_at equals created_at"
+      - name: created_date
+        description: "date portion of created_at (truncated to day)"
+      - name: latitude_rounded
+        description: "latitude rounded to two decimal places"
+      - name: longitude_rounded
+        description: "longitude rounded to two decimal places"

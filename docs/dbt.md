@@ -24,3 +24,24 @@
 |           stg_nyc_311_complaints.sql
 |           _staging.yml
 ```
+
+## HOW TO RUN
+
+1. Make sure postgres datbase is running
+
+```
+docker compose up
+```
+
+2. Make sure packages are up to date and everything looks good
+
+```
+docker compose run --rm dbt deps
+docker compose run --rm dbt debug
+```
+
+3. Run this command to update tables through
+
+```
+docker compose run --rm dbt build
+```
