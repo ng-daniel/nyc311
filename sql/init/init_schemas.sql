@@ -53,6 +53,3 @@ CREATE TABLE raw.ingestion_metadata (
     last_unique_key TEXT,
     updated_at TIMESTAMP DEFAULT NOW()
 );
-
-CREATE SCHEMA IF NOT EXISTS staging;
-CREATE SCHEMA IF NOT EXISTS mart;
