@@ -47,13 +47,3 @@ so it's probably some automated 311 ticket BS and not a bug. at least now we kno
 apparently they're not entirely in order. basically, don't batch ingestion by unique key, as the created_date values would be all out of wack
 not gonna post an example for this because im tired but I can assure you it is 100% true.
 I'll need to refactor batching to go by date ranges, which is probably more flexible long term anyways
-
-# your loading strategy maybe isn't the best?
-
-idk, check it out https://www.reddit.com/r/dataengineering/comments/11kdvkr/insert_data_into_db_best_practice/
-
-# TLDR
-
-im tired, gonna get a mickydees ice cream now bye
-
-didn't even get to test my dbt models

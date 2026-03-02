@@ -5,4 +5,4 @@ exp () {
 }
 
 exp "./.env"
-printenv | grep "DBT"
+printenv | grep -E "(DBT|POSTGRES|NYC)" | wc -l

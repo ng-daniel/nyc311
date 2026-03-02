@@ -1,28 +1,31 @@
-3/1/26 - dbt structure
+dbt models structure
 
 ```
 +---models
-|   |   sources.yml
+|   sources.yml
+|
++---intermediate
+|       intermediate.yml
+|       int_311_enriched.sql
+|
++---marts
+|   +---aggregates
+|   |       aggregates.yml
+|   |       fct_311_agency_performance.sql
+|   |       fct_311_daily.sql
+|   |       fct_311_geo_heatmap.sql
 |   |
-|   +---intermediate
-|   |       int_311_enriched.sql
-|   |
-|   +---marts
-|   |   +---aggregates
-|   |   |       fct_311_agency_performance.sql
-|   |   |       fct_311_daily.sql
-|   |   |       fct_311_geo_heatmap.sql
-|   |   |
-|   |   \---core
-|   |           dim_agency.sql
-|   |           dim_borough.sql
-|   |           dim_complaint_type.sql
-|   |           dim_date.sql
-|   |           fct_311_complaints.sql
-|   |
-|   \---staging
-|           stg_nyc_311_complaints.sql
-|           _staging.yml
+|   \---core
+|           core.yml
+|           dim_agency.sql
+|           dim_borough.sql
+|           dim_complaint_type.sql
+|           dim_date.sql
+|           fct_311_complaints.sql
+|
+\---staging
+        stg_nyc_311_complaints.sql
+        _staging.yml
 ```
 
 ## HOW TO RUN

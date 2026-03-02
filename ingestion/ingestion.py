@@ -91,9 +91,9 @@ class NYC311Ingestion:
         
         Implements this using a double request approach for efficiency 
         while still capping records at limit by setting the limit of main query
-        to `overall limit` - `number of tiebreaker rows`. 
+        to `overall limit` - `number of tiebreaker rows`.
 
-        If neither last_created_date or last_unique_key exist, 
+        Will just start from the oldest record if no specific date is provided.
 
         Args:
             limit: Maximum number of records to fetch.
