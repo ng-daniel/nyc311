@@ -40,9 +40,9 @@ DER BY c.created_date DESC LIMIT 50;
 | 42343352   | 2025-10-31 19:17:18 | 2025-10-31 19:17:18 | DOB    |
 | 42306145   | 2025-10-31 19:17:15 | 2025-10-31 19:17:15 | DOB    |
 
-so it's probably some automated 311 ticket BS and not a bug. at least now we know they exist and can be flagged as such when we find other rows with the same create/closed times
+so it's probably some automated 311 ticket thing and not a bug. at least now we know they exist and can be flagged as such when we find other rows with the same create/closed times
 
-# these unique keys SUCK
+# these unique keys (are not great)
 
 apparently they're not entirely in order. basically, don't batch ingestion by unique key, as the created_date values would be all out of wack
 not gonna post an example for this because im tired but I can assure you it is 100% true.
