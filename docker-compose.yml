@@ -16,11 +16,13 @@ services:
     container_name: nyc311_dbt
     volumes:
       - ./dbt/nyc311_dbt:/usr/app/dbt
-      - ./dbt/nyc311_dbt:/root/dbt
+    working_dir: /usr/app/dbt
     env_file:
       - .env
     depends_on:
       - postgres
+    environment:
+      DBT_PROFILES_DIR: /usr/app/dbt
 
 volumes:
   postgres_data:

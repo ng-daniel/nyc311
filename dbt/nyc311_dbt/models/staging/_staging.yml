@@ -1,0 +1,15 @@
+models:
+  - name: stg_nyc_311_complaints
+    columns:
+      - name: unique_key
+        tests:
+          - not_null
+          - unique
+
+      - name: created_at
+        tests:
+          - not_null
+
+      - name: agency
+        tests:
+          - not_null

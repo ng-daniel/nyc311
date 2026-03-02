@@ -1,0 +1,11 @@
+sources:
+  - name: raw
+    database: "{{ env_var('POSTGRES_DB') }}"
+    schema: raw
+    tables:
+      - name: nyc_311_complaints
+        description: "Raw NYC 311 data ingested from NYC Open Data API."
+        loaded_at_field: created_date
+        freshness:
+          warn_after: { count: 24, period: hour }
+          error_after: { count: 48, period: hour }

@@ -15,10 +15,10 @@ enriched as (
             else 'over_3_days'
         end as resolution_bucket,
 
-        date_trunc('day', created_at) as created_date
+        date_trunc('day', created_at) as created_date,
 
-        latitude_rounded as (round(latitude, 2)),
-        longitude_rounded as (round(longitude, 2)),
+        round(cast(latitude as numeric), 2) as latitude_rounded,
+        round(cast(longitude as numeric), 2) as longitude_rounded
 
     from base
 

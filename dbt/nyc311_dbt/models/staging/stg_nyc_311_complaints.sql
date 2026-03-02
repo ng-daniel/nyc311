@@ -8,7 +8,7 @@ with source as (
 cleaned as (
 
     select
-        unique_key                           as complaint_id,
+        unique_key                           as unique_key,
         created_date                         as created_at,
         closed_date                          as closed_at,
         due_date                             as due_at,
