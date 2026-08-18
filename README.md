@@ -55,20 +55,28 @@ NYC 311 API → Polars → PostgreSQL (raw schema) → dbt staging → dbt inter
 1. Configure environment variables in `.env` for Postgres connection.
 2. Build and run containers via Docker Compose:
 
-```
+```bash
 docker compose up -d
 ```
 
-3. Run dbt tests and transformations
+3. Run ingestion pipeline into raw data table.
+    - Starts at 1/1/2026 OR last ingested row. 
 
-```
-docker compose run --rm dbt dbt build
-docker compose run --rm dbt dbt test
+```bash
+uv run -- python ingestion/ingestion.py
 ```
 
-4. Use psql to explore and analyze data
+4. Run dbt tests and transformations
 
+```bash
+docker compose run --rm dbt deps
+docker compose run --rm dbt build
+docker compose run --rm dbt test
 ```
+
+5. Use psql to explore and analyze data
+
+```bash
 docker exec -it nyc311_postgres psql -U $POSTGRES_USER -d $POSTGRES_DB
 ```
 
