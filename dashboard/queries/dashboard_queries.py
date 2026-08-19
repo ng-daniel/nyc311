@@ -96,6 +96,7 @@ def get_overview_metrics() -> dict[str, Any]:
     record = overview.iloc[0].to_dict()
     for key in ("latest_created_at", "last_ingestion_at", "ingestion_watermark"):
         record[key] = pd.to_datetime(record[key], errors="coerce")
+        print(f"Converted {key} to timestamp: {record[key]}")
     return record
 
 

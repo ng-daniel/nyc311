@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import streamlit as st
@@ -32,7 +33,8 @@ def _format_timestamp(value: pd.Timestamp | None) -> str:
         return "Unavailable"
     timestamp = pd.Timestamp(value)
     if timestamp.tzinfo is None:
-        timestamp = timestamp.tz_localize(timezone.utc)
+        # assume EST if no timezone is provided, since the data is from NYC
+        timestamp = timestamp.tz_localize(ZoneInfo("America/New_York"))
     return timestamp.tz_convert("America/New_York").strftime("%Y-%m-%d %I:%M %p %Z")
 
 
