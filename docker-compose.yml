@@ -24,5 +24,20 @@ services:
     environment:
       DBT_PROFILES_DIR: /usr/app/dbt
 
+  dashboard:
+    build:
+      context: .
+      dockerfile: dashboard/Dockerfile
+    container_name: nyc311_dashboard
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./dashboard:/app/dashboard
+    restart: unless-stopped
+
 volumes:
   postgres_data:

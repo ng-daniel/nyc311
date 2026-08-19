@@ -56,7 +56,7 @@ NYC 311 API → Polars → PostgreSQL (raw schema) → dbt staging → dbt inter
 2. Build and run containers via Docker Compose:
 
 ```bash
-docker compose up -d
+docker compose up
 ```
 
 3. Run ingestion pipeline into raw data table.
@@ -72,18 +72,6 @@ uv run -- python ingestion/ingestion.py
 docker compose run --rm dbt deps
 docker compose run --rm dbt build
 docker compose run --rm dbt test
-```
-
-5. Use psql to explore and analyze data
-
-```bash
-docker exec -it nyc311_postgres psql -U $POSTGRES_USER -d $POSTGRES_DB
-```
-
-6. Run the Streamlit dashboard against the BI-ready mart tables
-
-```bash
-uv run streamlit run dashboard/app.py
 ```
 
 ## Summary
