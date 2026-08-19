@@ -80,6 +80,12 @@ docker compose run --rm dbt test
 docker exec -it nyc311_postgres psql -U $POSTGRES_USER -d $POSTGRES_DB
 ```
 
+6. Run the Streamlit dashboard against the BI-ready mart tables
+
+```bash
+uv run streamlit run dashboard/app.py
+```
+
 ## Summary
 
 - Ingestion and raw layer fully implemented and verified
