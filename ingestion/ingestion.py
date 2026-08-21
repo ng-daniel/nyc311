@@ -1,7 +1,10 @@
+import argparse
+import json
 import os
 import time
 import logging
 from io import StringIO
+from pathlib import Path
 from typing import List, Dict, Optional
 from datetime import datetime
 
@@ -170,6 +173,27 @@ class NYC311Ingestion:
         tiebreaker_data.extend(main_data)
         return tiebreaker_data
 
+    def extract_json_batch(self, json_source: str | Path) -> List[Dict]:
+        """
+        Load a batch of complaint records from a JSON file.
+
+        Args:
+            json_source: Path to a JSON file containing a list of complaint records.
+
+        Returns:
+            A list of dictionaries containing the batch of data.
+        """
+        source_path = Path(json_source)
+        with source_path.open("r", encoding="utf-8") as source_file:
+            data = json.load(source_file)
+
+        if not isinstance(data, list):
+            raise ValueError(f"Expected a JSON array of records in {source_path}")
+        if any(not isinstance(row, dict) for row in data):
+            raise ValueError(f"Expected every JSON record in {source_path} to be an object")
+
+        return data
+
     def normalize_batch_dicts(self, data: list[dict]) -> pl.DataFrame:
         """
         Normalize a batch of data represented as a list of dictionaries.
@@ -312,16 +336,36 @@ class NYC311Ingestion:
 
         return last_created_date, last_unique_key
 
-    def run_ingest_pipeline(self, start_date: Optional[datetime]) -> None:
+    def run_ingest_pipeline(
+        self,
+        start_date: Optional[datetime],
+        json_source: str | Path | None = None,
+    ) -> None:
         """
         Runs the full ingestion pipeline.
 
-        1. Extract batches of data from the API, starting from the last ingested key.
+        1. Extract batches of data from the API, or load records from a JSON file.
         2. Normalize the data by ensuring all columns align with expected ones.
            Ignore unexpected columns and set missing expected columns to null.
         3. Cast nested/struct columns to strings and load the normalized data
            into the raw/bronze layer via PostgreSQL COPY.
         """
+        if json_source:
+            logging.info(f"Starting ingestion from JSON source: {json_source}")
+            data = self.extract_json_batch(json_source)
+            if not data:
+                logging.info("No rows found in JSON source.")
+                return
+
+            df = self.normalize_batch_dicts(data)
+            self.load_batch(df)
+
+            last_row = df.sort(["created_date", "unique_key"]).tail(1)
+            last_date = last_row["created_date"][0]
+            last_key = last_row["unique_key"][0]
+            logging.info(f"{df.height} rows ingested from JSON. Latest: {last_date} {last_key}")
+            return
+
         last_date, last_key = self.get_latest_date_key()
         if start_date and (not last_date or start_date > last_date):
             last_date, last_key = start_date, None
@@ -408,7 +452,14 @@ class NYC311Ingestion:
 
 
 if __name__ == "__main__":
-    
-    start_date = datetime(2026, 1, 1)  # Example start date for backfill; set to None to use metadata watermark
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--json-source",
+        dest="json_source",
+        help="Path to a JSON file containing complaint records to ingest instead of pulling from the API.",
+    )
+    args = parser.parse_args()
+
+    start_date = datetime(2026, 1, 1)
     with NYC311Ingestion(batch_size=100000) as ingestion:
-        ingestion.run_ingest_pipeline(start_date=start_date)
+        ingestion.run_ingest_pipeline(start_date=start_date, json_source=args.json_source)
