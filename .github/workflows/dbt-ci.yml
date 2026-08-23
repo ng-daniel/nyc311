@@ -55,7 +55,7 @@ jobs:
           EOF
 
       - name: Start database
-        run: docker compose up
+        run: docker compose up -d postgres
 
       - name: Wait for database
         run: |
