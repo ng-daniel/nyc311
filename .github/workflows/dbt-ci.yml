@@ -55,7 +55,7 @@ jobs:
           EOF
 
       - name: Start database
-        run: docker compose up -d postgres
+        run: docker compose up
 
       - name: Wait for database
         run: |
@@ -74,13 +74,13 @@ jobs:
             --json-source tests/api_data_sample/sample_records_1000.json
 
       - name: Install dbt packages
-        run: docker compose run --rm dbt dbt deps
+        run: docker compose run --rm dbt deps
 
       - name: Build dbt models
-        run: docker compose run --rm dbt dbt build
+        run: docker compose run --rm dbt build
 
       - name: Test dbt models
-        run: docker compose run --rm dbt dbt test
+        run: docker compose run --rm dbt test
 
       - name: Cleanup
         if: always()
