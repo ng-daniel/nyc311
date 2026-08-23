@@ -1,0 +1,87 @@
+name: dbt CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  dbt:
+    runs-on: ubuntu-latest
+    env:
+      POSTGRES_USER: nyc311
+      POSTGRES_PASSWORD: nyc311_ci
+      POSTGRES_DB: nyc311_analytics
+      POSTGRES_PORT: 5432
+      POSTGRES_HOST: postgres
+      DBT_HOST: postgres
+      DBT_PORT: 5432
+      DBT_USER: nyc311
+      DBT_PASS: nyc311_ci
+      DBT_DBNAME: nyc311_analytics
+      DBT_DEFAULT_SCHEMA: analytics
+      NYC_OD_APP_TOKEN: ci-placeholder
+      NYC_311_URL: https://data.cityofnewyork.us/resource/erm2-nwe9.json
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install ingestion dependencies
+        run: python -m pip install requests python-dotenv polars psycopg2-binary
+
+      - name: Write CI environment file
+        run: |
+          cat <<EOF > .env
+          POSTGRES_USER=${POSTGRES_USER}
+          POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+          POSTGRES_DB=${POSTGRES_DB}
+          POSTGRES_PORT=${POSTGRES_PORT}
+          POSTGRES_HOST=${POSTGRES_HOST}
+          DBT_HOST=${DBT_HOST}
+          DBT_PORT=${DBT_PORT}
+          DBT_USER=${DBT_USER}
+          DBT_PASS=${DBT_PASS}
+          DBT_DBNAME=${DBT_DBNAME}
+          DBT_DEFAULT_SCHEMA=${DBT_DEFAULT_SCHEMA}
+          NYC_OD_APP_TOKEN=${NYC_OD_APP_TOKEN}
+          NYC_311_URL=${NYC_311_URL}
+          EOF
+
+      - name: Start database
+        run: docker compose up -d postgres
+
+      - name: Wait for database
+        run: |
+          for attempt in {1..30}; do
+            if docker compose exec -T postgres pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}"; then
+              exit 0
+            fi
+            echo "Database not ready yet (attempt ${attempt}/30)"
+            sleep 2
+          done
+          exit 1
+
+      - name: Load sample data
+        run: |
+          python ingestion/ingestion.py \
+            --json-source tests/api_data_sample/sample_records_1000.json
+
+      - name: Install dbt packages
+        run: docker compose run --rm dbt dbt deps
+
+      - name: Build dbt models
+        run: docker compose run --rm dbt dbt build
+
+      - name: Test dbt models
+        run: docker compose run --rm dbt dbt test
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v
