@@ -59,19 +59,15 @@ NYC 311 API → Polars → PostgreSQL (raw schema) → dbt staging → dbt inter
 docker compose up
 ```
 
-3. Run ingestion pipeline into raw data table.
-    - Starts at 1/1/2026 OR last ingested row. 
-
+3. Run ingestion pipeline (starts at current watermark or 1/1/26)
 ```bash
-uv run -- python ingestion/ingestion.py
+bash ingestion/ingestion_pipeline.sh
 ```
 
-4. Run dbt tests and transformations
+4. Manual Postgres debugging
 
 ```bash
-docker compose run --rm dbt deps
-docker compose run --rm dbt build
-docker compose run --rm dbt test
+docker exec -it nyc311_postgres psql -U $POSTGRES_USER -d $POSTGRES_DB
 ```
 
 ## Summary
@@ -79,4 +75,5 @@ docker compose run --rm dbt test
 - Ingestion and raw layer fully implemented and verified
 - Staging, intermediate, and marts models implemented with dbt tests passing
 - Incremental ingestion, metadata watermarking, and batch performance optimized
-- Still need to work on BI layer (dashboards + visualizations), which will involve tweaking the mart models to fit analysis needs
+- Simple dashboard for visualizing data
+- Devops via Automated Github Actions CI with a temporary postgres database and fixed sample data
