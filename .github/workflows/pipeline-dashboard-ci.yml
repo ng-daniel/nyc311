@@ -83,7 +83,7 @@ jobs:
         run: docker compose run --rm dbt test
 
       - name: Run dashboard in the background
-        run: docker compose run -d --rm dashboard
+        run: docker compose up -d dashboard
 
       - name: Wait for dashboard to be ready
         run: sleep 30
