@@ -82,8 +82,17 @@ jobs:
       - name: Test dbt models
         run: docker compose run --rm dbt test
 
-      - name: Run dashboard to check if it works
-        run: docker compose run --rm dashboard
+      - name: Run dashboard in the background
+        run: docker compose up -d dashboard
+
+      - name: Wait for dashboard to be ready
+        run: sleep 30
+
+      - name: Check if dashboard is running
+        run: docker compose ps dashboard
+
+      - name: Make HTTP request to dashboard
+        run: curl -f http://localhost:8501 || exit 1
 
       - name: Cleanup
         if: always()
