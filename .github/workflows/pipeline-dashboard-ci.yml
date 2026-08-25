@@ -1,4 +1,4 @@
-name: Ingestion Pipeline Test
+name: Pipeline and Dashboard Test
 
 on:
   push:
@@ -81,6 +81,9 @@ jobs:
 
       - name: Test dbt models
         run: docker compose run --rm dbt test
+
+      - name: Run dashboard to check if it works
+        run: docker compose run --rm dashboard
 
       - name: Cleanup
         if: always()
