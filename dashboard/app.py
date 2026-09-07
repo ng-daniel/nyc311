@@ -18,6 +18,7 @@ from queries.dashboard_queries import (
     get_overview_metrics,
     get_recent_complaints,
     get_top_complaint_types,
+    invalidate_cache_if_ingestion_changed,
 )
 
 
@@ -61,8 +62,8 @@ def _overview_header(metrics: dict[str, object]) -> None:
     agencies = int(metrics.get("agencies") or 0)
     avg_resolution_hours = metrics.get("avg_resolution_hours")
 
-    st.title("NYC 311 Operations Dashboard")
-    st.caption("Interactive BI view powered by dbt mart tables in PostgreSQL.")
+    st.title("NYC ServiceWatch")
+    st.caption("A 311 Service Request Operations Dashboard for the 5 Boroughs")
 
     metric_columns = st.columns(5)
     metric_columns[0].metric("Total Records", f"{total_records:,}")
@@ -98,6 +99,7 @@ def main() -> None:
 
     try:
         with st.spinner("Loading dashboard metrics..."):
+            invalidate_cache_if_ingestion_changed()
             metrics = get_overview_metrics()
             daily_trends = get_daily_trends(days)
             complaint_types = get_top_complaint_types(days)

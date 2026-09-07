@@ -8,6 +8,7 @@ from queries.dashboard_queries import (
     get_agency_performance,
     get_filter_options,
     get_recent_complaints,
+    invalidate_cache_if_ingestion_changed,
 )
 
 
@@ -23,6 +24,7 @@ def main() -> None:
     st.caption("Slice recent complaints without pulling the full dataset into Streamlit.")
 
     try:
+        invalidate_cache_if_ingestion_changed()
         filter_options = get_filter_options()
     except DashboardQueryError as exc:
         st.error(str(exc))

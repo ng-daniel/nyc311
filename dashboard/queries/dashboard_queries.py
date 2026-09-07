@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from threading import Lock
 from typing import Any
 
 import pandas as pd
@@ -14,6 +15,13 @@ load_dotenv()
 
 class DashboardQueryError(RuntimeError):
     pass
+
+
+IngestionWatermark = tuple[pd.Timestamp | None, str | None]
+
+_WATERMARK_UNSET = object()
+_last_seen_ingestion_watermark: IngestionWatermark | object = _WATERMARK_UNSET
+_watermark_lock = Lock()
 
 
 def _database_host() -> str:
@@ -47,6 +55,55 @@ def _run_query(query: str, params: tuple[Any, ...] = ()) -> pd.DataFrame:
 
 def _as_timestamp(series: pd.Series) -> pd.Series:
     return pd.to_datetime(series, errors="coerce")
+
+
+def _current_ingestion_watermark() -> IngestionWatermark:
+    """Read the current composite ingestion watermark without caching it."""
+    metadata = _run_query(
+        """
+        select last_created_date, last_unique_key
+        from raw.ingestion_metadata
+        where source_name = 'nyc_311_complaints'
+        """
+    )
+    if metadata.empty:
+        return None, None
+
+    record = metadata.iloc[0]
+    last_created_date = pd.to_datetime(record["last_created_date"], errors="coerce")
+    if pd.isna(last_created_date):
+        last_created_date = None
+
+    last_unique_key = record["last_unique_key"]
+    if pd.isna(last_unique_key):
+        last_unique_key = None
+    elif last_unique_key is not None:
+        last_unique_key = str(last_unique_key)
+
+    return last_created_date, last_unique_key
+
+
+def invalidate_cache_if_ingestion_changed() -> bool:
+    """Clear cached dashboard data when Postgres reports a new watermark.
+
+    The watermark query itself is intentionally uncached so every Streamlit rerun
+    checks Postgres. The last value is process-wide because ``st.cache_data`` is
+    also shared across sessions in the same app process.
+    """
+    global _last_seen_ingestion_watermark
+    with _watermark_lock:
+        current_watermark = _current_ingestion_watermark()
+
+        if _last_seen_ingestion_watermark is _WATERMARK_UNSET:
+            _last_seen_ingestion_watermark = current_watermark
+            return False
+
+        if _last_seen_ingestion_watermark == current_watermark:
+            return False
+
+        st.cache_data.clear()
+        _last_seen_ingestion_watermark = current_watermark
+        return True
 
 
 @st.cache_data(ttl=300)
