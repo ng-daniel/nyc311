@@ -61,8 +61,8 @@ def _overview_header(metrics: dict[str, object]) -> None:
     agencies = int(metrics.get("agencies") or 0)
     avg_resolution_hours = metrics.get("avg_resolution_hours")
 
-    st.title("NYC 311 Operations Dashboard")
-    st.caption("Interactive BI view powered by dbt mart tables in PostgreSQL.")
+    st.title("NYC ServiceWatch")
+    st.caption("A 311 Service Request Operations Dashboard for the 5 Boroughs")
 
     metric_columns = st.columns(5)
     metric_columns[0].metric("Total Records", f"{total_records:,}")
