@@ -18,6 +18,7 @@ from queries.dashboard_queries import (
     get_overview_metrics,
     get_recent_complaints,
     get_top_complaint_types,
+    invalidate_cache_if_ingestion_changed,
 )
 
 
@@ -98,6 +99,7 @@ def main() -> None:
 
     try:
         with st.spinner("Loading dashboard metrics..."):
+            invalidate_cache_if_ingestion_changed()
             metrics = get_overview_metrics()
             daily_trends = get_daily_trends(days)
             complaint_types = get_top_complaint_types(days)
