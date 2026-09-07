@@ -1,5 +1,7 @@
 # NYC 311 Data Engineering and Analytics Pipeline
 
+<img width="1847" height="1072" alt="nycServiceWatchDashboard" src="https://github.com/user-attachments/assets/079c7c7d-3702-4a3f-9c68-2a9d2476fec5" />
+
 ## Overview
 
 This project implements an end-to-end ELT pipeline for NYC 311 service request data. The pipeline ingests raw data from the NYC Open Data API, transforms and enriches it using dbt, and produces BI-ready aggregates for analysis of complaints trends, agency performance, and geospatial distribution.
